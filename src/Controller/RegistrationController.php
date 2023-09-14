@@ -7,48 +7,71 @@ use App\Form\RegistrationFormType;
 use App\Security\UserAuthenticatorControllerAuthenticator;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Authentication\UserAuthenticatorInterface;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 class RegistrationController extends AbstractController
 {
-    #[Route('/register', name: 'app_register')]
-    public function register(Request $request, UserPasswordHasherInterface $userPasswordHasher, UserAuthenticatorInterface $userAuthenticator, UserAuthenticatorControllerAuthenticator $authenticator, EntityManagerInterface $entityManager): Response
+    #[Route('/api/register', name: 'app_register')]
+    public function register(Request $request, UserPasswordHasherInterface $userPasswordHasher, EntityManagerInterface $entityManager, ValidatorInterface $validator): JsonResponse
     {
-        $user = new User();
-        $form = $this->createForm(RegistrationFormType::class, $user);
-        $form->handleRequest($request);
+        $data = json_decode($request->getContent(), true);
 
-        if ($form->isSubmitted() && $form->isValid()) {
-            // encode the plain password
-            $user->setPassword(
-                $userPasswordHasher->hashPassword(
-                    $user,
-                    $form->get('plainPassword')->getData()
-                )
-            );
-
-            $name = $user->getUsername();
-            $avatarUrl = "https://avatars.dicebear.com/api/human/$name.svg";
-            $user->setProfileImage($avatarUrl);
-
-            $entityManager->persist($user);
-            $entityManager->flush();
-            // do anything else you need here, like send an email
-
-            return $userAuthenticator->authenticateUser(
-                $user,
-                $authenticator,
-                $request
-            );
+        if ($data === null) {
+            return new JsonResponse(['error' => 'Invalid JSON'], 400);
         }
 
-        return $this->render('registration/register.html.twig', [
-            'registrationForm' => $form->createView(),
-        ]);
+        $user = new User();
+        $user->setUsername($data['username'] ?? '');
+        $user->setEmail($data['email'] ?? '');
+        $user->setPassword($data['password'] ?? '');
+
+        $errors = $validator->validate($user);
+        if (count($errors) > 0) {
+            $errorMessages = [];
+            foreach ($errors as $violation) {
+                $errorMessages[] = [
+                    'field' => $violation->getPropertyPath(),
+                    'message' => $violation->getMessage()
+                ];
+            }
+
+            return new JsonResponse([
+                'success' => false,
+                'message' => 'Registration failed',
+                'errors' => $errorMessages
+            ], 400);
+        }
+
+        $user->setPassword(
+            $userPasswordHasher->hashPassword(
+                $user,
+                $data['password']
+            )
+        );
+
+        $name = $user->getUsername();
+        $avatarUrl = "https://avatars.dicebear.com/api/human/$name.svg";
+        $user->setProfileImage($avatarUrl);
+
+        $entityManager->persist($user);
+        $entityManager->flush();
+
+        return new JsonResponse([
+            'success' => true,
+            'message' => 'User registered successfully',
+            'user' => [
+                'id' => $user->getId(),
+                'username' => $user->getUsername(),
+                'email' => $user->getEmail(),
+                'avatar' => $user->getProfileImage()
+            ]
+        ], 201);
     }
 }
