@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\Form\RegistrationFormType;
 use App\Security\UserAuthenticatorControllerAuthenticator;
 use Doctrine\ORM\EntityManagerInterface;
+use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -18,6 +19,13 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 
 class RegistrationController extends AbstractController
 {
+    private $JWTManager;
+
+    public function __construct(JWTTokenManagerInterface $JWTManager)
+    {
+        $this->JWTManager = $JWTManager;
+    }
+
     #[Route('/api/register', name: 'app_register')]
     public function register(Request $request, UserPasswordHasherInterface $userPasswordHasher, EntityManagerInterface $entityManager, ValidatorInterface $validator): JsonResponse
     {
@@ -63,9 +71,12 @@ class RegistrationController extends AbstractController
         $entityManager->persist($user);
         $entityManager->flush();
 
+        $token = $this->JWTManager->create($user);
+
         return new JsonResponse([
             'success' => true,
             'message' => 'User registered successfully',
+            'token' => $token,
             'user' => [
                 'id' => $user->getId(),
                 'username' => $user->getUsername(),

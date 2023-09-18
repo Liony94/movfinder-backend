@@ -70,6 +70,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->dislikeSeries = new ArrayCollection();
     }
 
+    public function toArray(): array
+    {
+        return [
+            'id' => $this->getId(),
+            'email' => $this->getEmail(),
+            'roles' => $this->getRoles(),
+            'username' => $this->getUsername(),
+            'profileImage' => $this->getProfileImage(),
+            'description' => $this->getDescription(),
+        ];
+    }
+
     public function getId(): ?int
     {
         return $this->id;
